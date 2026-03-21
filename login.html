@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ReliefFund — Organisation Login</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    .login-page { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 20px; position: relative; z-index: 1; }
+    .login-wrap { width: 100%; max-width: 440px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 500; margin-bottom: 28px; transition: color var(--transition); }
+    .back-link:hover { color: var(--forest); }
+    .login-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 40px; box-shadow: var(--shadow-lg); }
+    .org-badge { display: inline-flex; align-items: center; gap: 8px; background: var(--forest-muted); color: var(--forest); border: 1px solid var(--border-2); padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+    .login-title { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--forest); margin-bottom: 6px; line-height: 1.15; }
+    .login-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
+    .error-banner { background: rgba(193,68,14,0.08); border: 1px solid var(--terra-border); border-radius: var(--radius); padding: 11px 16px; color: var(--terra-2); font-size: 13px; margin-bottom: 16px; display: none; }
+    .error-banner.visible { display: block; }
+    .btn-login { width: 100%; padding: 14px; font-size: 15px; }
+    .input-with-toggle { position: relative; }
+    .input-with-toggle .form-input { padding-right: 48px; }
+    .toggle-pw { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 16px; padding: 4px; transition: color var(--transition); }
+    .toggle-pw:hover { color: var(--forest); }
+    .divider { margin: 28px 0; }
+    .login-footer-text { text-align: center; font-size: 12px; color: var(--text-dim); margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <div class="logo-mark">🌿</div>
+        <span class="logo-name">Relief<span>Fund</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="index.html" class="nav-link">Organisations</a>
+        <a href="donate.html" class="nav-link btn btn-terra btn-sm">♥ Donate</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="login-page">
+    <div class="login-wrap">
+      <a href="index.html" class="back-link">← Back to Directory</a>
+
+      <div class="login-card">
+        <div class="org-badge">
+          <span>🏢</span>
+          <span id="org-name-badge">Organisation Portal</span>
+        </div>
+
+        <h1 class="login-title">Staff Login</h1>
+        <p class="login-subtitle">Sign in with your authorised credentials to access the payment portal.</p>
+
+        <div class="error-banner" id="error-banner"></div>
+
+        <div class="form-group">
+          <label class="form-label">Email Address <span class="required">*</span></label>
+          <input type="email" class="form-input" id="email-input"
+            placeholder="staff@organisation.org" autocomplete="username"/>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password <span class="required">*</span></label>
+          <div class="input-with-toggle">
+            <input type="password" class="form-input" id="password-input"
+              placeholder="Enter your password" autocomplete="current-password"
+              onkeydown="if(event.key==='Enter') submitLogin()"/>
+            <button class="toggle-pw" onclick="togglePassword()" type="button">👁</button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-login" id="login-btn" onclick="submitLogin()">
+          Sign In
+        </button>
+
+        <div class="divider"></div>
+
+        <div class="login-footer-text">
+          Credentials are managed by your organisation administrator.<br/>
+          Contact admin if you need access.
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    ReliefFund &nbsp;·&nbsp; Secure Login &nbsp;·&nbsp; Powered by Supabase Auth
+  </footer>
+
+  <div id="toast-container"></div>
+
+  <script type="module">
+    import { supabase, showToast } from './supabase-config.js';
+
+    const params  = new URLSearchParams(window.location.search);
+    const orgId   = params.get("org")  || "unknown";
+    const orgName = params.get("name") || "Organisation";
+
+    document.getElementById("org-name-badge").textContent = orgName;
+    document.title = `${orgName} — Login | ReliefFund`;
+
+    // ── If already logged in, skip straight to payment page ──────────────────
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      window.location.href = `payment.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+    }
+
+    // ── Listen for auth state changes (e.g. magic link return) ───────────────
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        window.location.href = `payment.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+      }
+    });
+
+    // ── Login ─────────────────────────────────────────────────────────────────
+    window.submitLogin = async function() {
+      const email      = document.getElementById("email-input").value.trim();
+      const password   = document.getElementById("password-input").value;
+      const btn        = document.getElementById("login-btn");
+      const errBanner  = document.getElementById("error-banner");
+
+      errBanner.classList.remove("visible");
+
+      if (!email || !password) {
+        errBanner.textContent = "Please enter both email and password.";
+        errBanner.classList.add("visible");
+        return;
+      }
+
+      btn.disabled  = true;
+      btn.innerHTML = `<span class="spinner"></span> Signing in…`;
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        // Map Supabase error messages to user-friendly text
+        const messages = {
+          "Invalid login credentials":  "Invalid email or password. Please try again.",
+          "Email not confirmed":        "Please verify your email before signing in.",
+          "Too many requests":          "Too many attempts. Please wait and try again.",
+          "User not found":             "No account found with this email.",
+        };
+        const msg = Object.entries(messages).find(([k]) => error.message.includes(k))?.[1]
+          ?? error.message;
+        errBanner.textContent = msg;
+        errBanner.classList.add("visible");
+        btn.disabled  = false;
+        btn.innerHTML = "Sign In";
+        return;
+      }
+
+      showToast("Login successful! Redirecting…", "success");
+      setTimeout(() => {
+        window.location.href = `payment.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+      }, 700);
+    };
+
+    window.togglePassword = function() {
+      const input = document.getElementById("password-input");
+      input.type  = input.type === "password" ? "text" : "password";
+    };
+  </script>
+</body>
+</html>

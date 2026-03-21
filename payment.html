@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ReliefFund — Organisation Payment Portal</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .payment-layout { display: grid; grid-template-columns: 1fr 360px; gap: 32px; align-items: start; }
+    .org-context-bar { background: var(--forest); color: #fff; padding: 14px 40px; position: relative; z-index: 1; }
+    .org-context-inner { max-width: 1200px; margin: 0 auto; width: 100%; display: flex; align-items: center; justify-content: space-between; }
+    .org-context-name { font-family: var(--font-display); font-size: 18px; font-weight: 600; color: #f7f3ec; display: flex; align-items: center; gap: 10px; }
+    .org-context-badge { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.20); color: rgba(255,255,255,0.8); font-size: 11px; font-family: var(--font-mono); letter-spacing: 1px; text-transform: uppercase; padding: 4px 10px; border-radius: 6px; }
+    .logout-btn { background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.20); color: rgba(255,255,255,0.75); padding: 7px 16px; border-radius: var(--radius); font-family: var(--font-body); font-size: 13px; cursor: pointer; transition: all var(--transition); }
+    .logout-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+    .verification-panel { background: var(--ivory-2); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 16px; }
+    .verification-header { padding: 14px 20px; background: var(--ivory-3); border-bottom: 1px solid var(--border); font-size: 12px; font-family: var(--font-mono); letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); }
+    .verification-items { padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+    .verification-item { display: flex; align-items: flex-start; gap: 12px; }
+    .verif-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .verif-icon.pending { background: var(--gold-soft); border: 1px solid rgba(184,147,63,0.3); }
+    .verif-icon.active  { background: rgba(26,58,42,0.10); border: 1px solid var(--border-2); }
+    .verif-info { flex: 1; }
+    .verif-title { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 2px; }
+    .verif-desc  { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+    .verif-status { font-family: var(--font-mono); font-size: 10px; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.5px; flex-shrink: 0; }
+    .verif-status.pending-status { background: var(--gold-soft); color: var(--gold); border: 1px solid rgba(184,147,63,0.3); }
+    .records-table-wrap { overflow-x: auto; }
+    .records-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .records-table th { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .records-table td { padding: 11px 16px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+    .records-table tr:last-child td { border-bottom: none; }
+    .records-table tr:hover td { background: var(--ivory); }
+    .records-table td.mono { font-family: var(--font-mono); font-size: 12px; }
+    .mrp-cell { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--forest); }
+    .empty-table { text-align: center; padding: 40px; color: var(--text-dim); font-style: italic; }
+    .map-placeholder { background: var(--ivory-2); border: 2px dashed var(--border-2); border-radius: var(--radius); padding: 24px; text-align: center; margin-top: 8px; }
+    .map-placeholder-icon { font-size: 32px; margin-bottom: 8px; }
+    .map-placeholder-label { font-weight: 600; color: var(--text-2); font-size: 14px; margin-bottom: 4px; }
+    .map-placeholder-hint { font-size: 12px; color: var(--text-dim); }
+    .map-coords { font-family: var(--font-mono); font-size: 12px; color: var(--forest); margin-top: 8px; display: none; }
+    .summary-card { background: var(--forest); color: #fff; border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px; }
+    .summary-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin-bottom: 16px; color: #f7f3ec; }
+    .summary-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.10); font-size: 13px; gap: 12px; }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-row-label { color: rgba(255,255,255,0.5); flex-shrink: 0; }
+    .summary-row-value { font-family: var(--font-mono); font-weight: 500; color: #fff; text-align: right; word-break: break-all; font-size: 12px; }
+    @media (max-width: 900px) { .payment-layout { grid-template-columns: 1fr; } .org-context-bar { padding: 12px 20px; } }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <div class="logo-mark">🌿</div>
+        <span class="logo-name">Relief<span>Fund</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="index.html" class="nav-link">Directory</a>
+        <a href="donate.html" class="nav-link btn btn-terra btn-sm">♥ Donate</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="org-context-bar">
+    <div class="org-context-inner">
+      <div class="org-context-name">
+        <span>🏢</span>
+        <span id="org-name-display">Organisation Portal</span>
+        <span class="org-context-badge" id="org-id-display">—</span>
+      </div>
+      <button class="logout-btn" onclick="logoutUser()">Sign Out →</button>
+    </div>
+  </div>
+
+  <main class="page-content">
+    <div class="page-hero">
+      <div class="page-eyebrow">Payment Recording System</div>
+      <h1 class="page-title">Record a Payment</h1>
+      <p class="page-subtitle">Log product purchases with receipt verification. All records are timestamped and stored in Supabase.</p>
+    </div>
+
+    <div class="payment-layout">
+      <div>
+        <!-- Product Details -->
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-header">
+            <div class="card-icon">📦</div>
+            <div class="card-title">Product Details</div>
+          </div>
+          <div class="card-body">
+            <div class="section-label">Item Information</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Product Code <span class="required">*</span></label>
+                <input type="text" class="form-input" id="product-code-input"
+                  placeholder="e.g. RICE-001" oninput="updateSummary()"
+                  style="font-family:var(--font-mono);letter-spacing:1px;text-transform:uppercase;"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">MRP (₹) <span class="required">*</span></label>
+                <input type="number" class="form-input" id="mrp-input"
+                  placeholder="0.00" min="0" step="0.01" oninput="updateSummary()"/>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Timestamp (Auto-generated)</label>
+              <div id="timestamp-display" class="form-input readonly-input">—</div>
+              <div class="form-hint">Recorded automatically at submission.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shop Location -->
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-header">
+            <div class="card-icon">📍</div>
+            <div class="card-title">Shop Location</div>
+          </div>
+          <div class="card-body">
+            <div class="section-label">Location & Verification</div>
+            <div class="form-group">
+              <label class="form-label">Shop Location / Address <span class="required">*</span></label>
+              <input type="text" class="form-input" id="shop-location-input"
+                placeholder="e.g. Fair Price Shop, Sector 4, Patna, Bihar"
+                oninput="updateSummary()"/>
+            </div>
+            <div class="map-placeholder">
+              <div class="map-placeholder-icon">🗺️</div>
+              <div class="map-placeholder-label">Geotagging Verification</div>
+              <div class="map-placeholder-hint">GPS coordinates appear here once geotagging is enabled.</div>
+              <div class="map-coords" id="geo-coords"></div>
+              <button class="btn btn-outline btn-sm" style="margin-top:12px;" onclick="requestGeolocation()">
+                📍 Capture GPS Location
+              </button>
+            </div>
+            <div class="integration-placeholder" style="margin-top:12px;">
+              <div class="integration-badge">GEO</div>
+              <div class="integration-text">
+                <strong>Geotagging Integration Point</strong>
+                Compare captured GPS with registered shop coordinates. Plug in Google Maps Geocoding API here.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Receipt Upload -->
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-header">
+            <div class="card-icon">🧾</div>
+            <div class="card-title">Receipt Upload</div>
+          </div>
+          <div class="card-body">
+            <div class="section-label">Document Verification</div>
+            <div class="form-group">
+              <div class="upload-zone" id="receipt-upload-zone">
+                <input type="file" accept="image/*,.pdf" id="receipt-file"
+                  onchange="handleFileSelect(this, 'receipt-preview')"/>
+                <span class="upload-icon">🧾</span>
+                <span class="upload-label">Upload Receipt / Invoice</span>
+                <span class="upload-hint">JPEG, PNG or PDF · Max 10MB</span>
+                <div class="upload-preview" id="receipt-preview"></div>
+              </div>
+              <div class="integration-placeholder" style="margin-top:12px;">
+                <div class="integration-badge">OCR</div>
+                <div class="integration-text">
+                  <strong>Receipt OCR Integration Point</strong>
+                  Auto-extract product code, MRP, and shop name from receipt image.
+                </div>
+              </div>
+              <div class="integration-placeholder" style="margin-top:8px;">
+                <div class="integration-badge">VERIFY</div>
+                <div class="integration-text">
+                  <strong>Shop Name Cross-Verification</strong>
+                  Match OCR-extracted shop name against the location entered above.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-lg btn-full" id="submit-btn" onclick="submitPayment()">
+          ✓ Record Payment
+        </button>
+      </div>
+
+      <!-- Right: Summary + Verification -->
+      <div>
+        <div class="summary-card">
+          <div class="summary-title">Payment Summary</div>
+          <div class="summary-row"><span class="summary-row-label">Product</span><span class="summary-row-value" id="sum-product">—</span></div>
+          <div class="summary-row"><span class="summary-row-label">MRP</span><span class="summary-row-value" id="sum-mrp">—</span></div>
+          <div class="summary-row"><span class="summary-row-label">Shop</span><span class="summary-row-value" id="sum-shop">—</span></div>
+          <div class="summary-row"><span class="summary-row-label">GPS</span><span class="summary-row-value" id="sum-gps">Not captured</span></div>
+          <div class="summary-row"><span class="summary-row-label">Receipt</span><span class="summary-row-value" id="sum-receipt">Not uploaded</span></div>
+          <div class="summary-row"><span class="summary-row-label">Time</span><span class="summary-row-value" id="sum-time" style="font-size:10px;">—</span></div>
+        </div>
+
+        <div class="verification-panel">
+          <div class="verification-header">Verification Status</div>
+          <div class="verification-items">
+            <div class="verification-item">
+              <div class="verif-icon active" id="vi-receipt-icon">📄</div>
+              <div class="verif-info">
+                <div class="verif-title">Receipt Upload</div>
+                <div class="verif-desc">Manual upload · Stored in Supabase Storage</div>
+              </div>
+              <div class="verif-status pending-status" id="vi-receipt-status">Pending</div>
+            </div>
+            <div class="verification-item">
+              <div class="verif-icon pending">🔍</div>
+              <div class="verif-info">
+                <div class="verif-title">OCR Extraction</div>
+                <div class="verif-desc">Auto-read product/MRP from receipt · Plug-in ready</div>
+              </div>
+              <div class="verif-status pending-status">Plug-in</div>
+            </div>
+            <div class="verification-item">
+              <div class="verif-icon pending" id="vi-geo-icon">📍</div>
+              <div class="verif-info">
+                <div class="verif-title">GPS Geotagging</div>
+                <div class="verif-desc">Verify shop via GPS coordinates · Plug-in ready</div>
+              </div>
+              <div class="verif-status pending-status" id="vi-geo-status">Pending</div>
+            </div>
+            <div class="verification-item">
+              <div class="verif-icon pending">✅</div>
+              <div class="verif-info">
+                <div class="verif-title">Shop Cross-Verification</div>
+                <div class="verif-desc">Match OCR shop name with GPS · Plug-in ready</div>
+              </div>
+              <div class="verif-status pending-status">Plug-in</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Records Table -->
+    <div class="card" style="margin-top: 32px;">
+      <div class="card-header">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Payment Records</div>
+        <div style="margin-left: auto;">
+          <button class="btn btn-outline btn-sm" onclick="exportPaymentCSV()">⬇ Export CSV</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 0;">
+        <div class="records-table-wrap">
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>Product Code</th>
+                <th>MRP</th>
+                <th>Shop Location</th>
+                <th>Timestamp</th>
+                <th>Receipt</th>
+                <th>GPS</th>
+              </tr>
+            </thead>
+            <tbody id="payments-tbody">
+              <tr><td colspan="6" class="empty-table">Loading records…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    ReliefFund &nbsp;·&nbsp; Organisation Payment Portal &nbsp;·&nbsp; Powered by Supabase
+  </footer>
+
+  <div id="toast-container"></div>
+
+  <!-- ── Standalone CSV ─────────────────────────────────────────────────── -->
+  <script>
+    window._paymentRecords = [];
+
+    window.exportPaymentCSV = function() {
+      const records = window._paymentRecords;
+      if (!records.length) { alert("No records to export yet."); return; }
+      const cols   = ["Product-code", "MRP", "Shop-location", "Timestamp"];
+      const header = cols.join(",");
+      const rows   = records.map(r => [
+        r.product_code   || "",
+        r.mrp            || "",
+        r.shop_location  || "",
+        r.timestamp      || ""
+      ].map(v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g,'""')}"` : v).join(","));
+      const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+      const a = Object.assign(document.createElement("a"), {
+        href: URL.createObjectURL(blob),
+        download: `payments_${(new URLSearchParams(location.search).get("org")) || "org"}.csv`
+      });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    };
+  </script>
+
+  <script type="module">
+    import { supabase, generateTimestamp, uploadFile, showToast }
+      from './supabase-config.js';
+
+    const params  = new URLSearchParams(window.location.search);
+    const orgId   = params.get("org")  || "unknown";
+    const orgName = params.get("name") || "Organisation";
+
+    document.getElementById("org-name-display").textContent = orgName;
+    document.getElementById("org-id-display").textContent   = orgId;
+    document.title = `${orgName} — Payment Portal | ReliefFund`;
+
+    // ── Auth guard — redirect to login if no session ──────────────────────────
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      window.location.href = `login.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+    }
+
+    // Also listen for sign-out events
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        window.location.href = `login.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+      }
+    });
+
+    window.logoutUser = async function() {
+      await supabase.auth.signOut();
+      window.location.href = `login.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+    };
+
+    // ── State ──────────────────────────────────────────────────────────────────
+    let selectedFile = null;
+    let capturedGPS  = null;
+
+    // ── Timestamp clock ───────────────────────────────────────────────────────
+    function tick() {
+      const ts = generateTimestamp();
+      document.getElementById("timestamp-display").textContent = ts;
+      document.getElementById("sum-time").textContent = ts;
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    // ── Summary ───────────────────────────────────────────────────────────────
+    window.updateSummary = function() {
+      const code = document.getElementById("product-code-input").value.trim().toUpperCase() || "—";
+      const mrp  = parseFloat(document.getElementById("mrp-input").value);
+      const shop = document.getElementById("shop-location-input").value.trim() || "—";
+      document.getElementById("sum-product").textContent = code;
+      document.getElementById("sum-mrp").textContent     = mrp ? "₹" + mrp.toLocaleString("en-IN") : "—";
+      document.getElementById("sum-shop").textContent    = shop.length > 28 ? shop.slice(0,28) + "…" : shop;
+    };
+
+    // ── Geolocation ───────────────────────────────────────────────────────────
+    window.requestGeolocation = function() {
+      if (!navigator.geolocation) { showToast("Geolocation not supported.", "error"); return; }
+      showToast("Capturing GPS…", "info");
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          capturedGPS = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+          const txt = `${capturedGPS.lat.toFixed(6)}, ${capturedGPS.lng.toFixed(6)}`;
+          document.getElementById("geo-coords").textContent   = `📍 ${txt} (±${Math.round(capturedGPS.accuracy)}m)`;
+          document.getElementById("geo-coords").style.display = "block";
+          document.getElementById("sum-gps").textContent      = txt;
+          document.getElementById("vi-geo-status").textContent = "Captured";
+          document.getElementById("vi-geo-icon").textContent   = "✅";
+          showToast("GPS captured!", "success");
+          // ── GEOTAGGING INTEGRATION POINT ────────────────────────────────────
+          // verifyShopLocation(capturedGPS, shopLocation).then(r => showToast(...));
+        },
+        err => {
+          const m = { 1:"Permission denied.", 2:"Location unavailable.", 3:"Timed out." };
+          showToast(m[err.code] || "Geolocation error.", "error");
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    };
+
+    // ── File select ───────────────────────────────────────────────────────────
+    window.handleFileSelect = function(input, previewId) {
+      const f = input.files[0];
+      if (!f) return;
+      selectedFile = f;
+      document.getElementById(previewId).textContent = "✓ " + f.name;
+      document.getElementById("sum-receipt").textContent = "Attached ✓";
+      document.getElementById("vi-receipt-status").textContent = "Attached";
+      // ── OCR INTEGRATION POINT ─────────────────────────────────────────────
+      // runReceiptOCR(f).then(d => { /* populate fields */ updateSummary(); });
+    };
+
+    const zone = document.getElementById("receipt-upload-zone");
+    zone.addEventListener("dragover",  e => { e.preventDefault(); zone.classList.add("dragover"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
+    zone.addEventListener("drop", e => {
+      e.preventDefault(); zone.classList.remove("dragover");
+      const f = e.dataTransfer.files[0];
+      if (f) { selectedFile = f; document.getElementById("receipt-preview").textContent = "✓ " + f.name; document.getElementById("sum-receipt").textContent = "Attached ✓"; }
+    });
+
+    // ── Submit ────────────────────────────────────────────────────────────────
+    window.submitPayment = async function() {
+      const productCode  = document.getElementById("product-code-input").value.trim().toUpperCase();
+      const mrp          = parseFloat(document.getElementById("mrp-input").value);
+      const shopLocation = document.getElementById("shop-location-input").value.trim();
+      const btn          = document.getElementById("submit-btn");
+
+      if (!productCode)          { showToast("Please enter a product code.", "error"); return; }
+      if (!mrp || mrp <= 0)      { showToast("Please enter a valid MRP.", "error"); return; }
+      if (!shopLocation)         { showToast("Please enter the shop location.", "error"); return; }
+
+      btn.disabled  = true;
+      btn.innerHTML = `<span class="spinner"></span> Recording…`;
+
+      try {
+        const timestamp  = generateTimestamp();
+        let   receipt_url = null;
+
+        // Upload receipt to Supabase Storage bucket "receipts"
+        if (selectedFile) {
+          receipt_url = await uploadFile(
+            "receipts",
+            `${orgId}/${Date.now()}_${selectedFile.name}`,
+            selectedFile
+          );
+        }
+
+        // Insert row into "org_payments" table
+        const { data, error } = await supabase
+          .from("org_payments")
+          .insert([{
+            org_id:        orgId,
+            org_name:      orgName,
+            product_code:  productCode,
+            mrp:           mrp,
+            shop_location: shopLocation,
+            timestamp:     timestamp,
+            receipt_url:   receipt_url,
+            gps_lat:       capturedGPS?.lat  ?? null,
+            gps_lng:       capturedGPS?.lng  ?? null,
+            gps_accuracy:  capturedGPS?.accuracy ?? null,
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        window._paymentRecords.unshift(data);
+        showToast("✓ Payment recorded successfully!", "success");
+        renderTable(window._paymentRecords);
+
+        // Reset form
+        document.getElementById("product-code-input").value    = "";
+        document.getElementById("mrp-input").value             = "";
+        document.getElementById("shop-location-input").value   = "";
+        document.getElementById("receipt-preview").textContent = "";
+        document.getElementById("sum-product").textContent     = "—";
+        document.getElementById("sum-mrp").textContent         = "—";
+        document.getElementById("sum-shop").textContent        = "—";
+        document.getElementById("sum-receipt").textContent     = "Not uploaded";
+        selectedFile = null;
+
+      } catch (err) {
+        console.error(err);
+        showToast("Error saving record: " + (err.message || "Check Supabase config."), "error");
+      } finally {
+        btn.disabled  = false;
+        btn.innerHTML = "✓ Record Payment";
+      }
+    };
+
+    // ── Load records ──────────────────────────────────────────────────────────
+    async function loadRecords() {
+      const { data, error } = await supabase
+        .from("org_payments")
+        .select("*")
+        .eq("org_id", orgId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) {
+        document.getElementById("payments-tbody").innerHTML =
+          `<tr><td colspan="6" class="empty-table">Connect Supabase to view records.</td></tr>`;
+        return;
+      }
+      window._paymentRecords = data || [];
+      renderTable(window._paymentRecords);
+    }
+
+    function renderTable(records) {
+      const tbody = document.getElementById("payments-tbody");
+      if (!records.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-table">No payments recorded yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = records.map(r => {
+        const gps = (r.gps_lat && r.gps_lng)
+          ? `${Number(r.gps_lat).toFixed(4)}, ${Number(r.gps_lng).toFixed(4)}`
+          : "—";
+        return `<tr>
+          <td class="mono">${r.product_code || "—"}</td>
+          <td class="mrp-cell">₹${Number(r.mrp).toLocaleString("en-IN")}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.shop_location}">${r.shop_location || "—"}</td>
+          <td class="mono" style="font-size:11px;">${r.timestamp}</td>
+          <td>${r.receipt_url
+            ? `<a href="${r.receipt_url}" target="_blank" style="color:var(--terra);font-size:12px;">View ↗</a>`
+            : `<span style="color:var(--text-dim);font-size:12px;">—</span>`}</td>
+          <td class="mono" style="font-size:11px;">${gps}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    loadRecords();
+  </script>
+</body>
+</html>
