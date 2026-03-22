@@ -144,6 +144,26 @@
               <div class="form-hint">12-digit Aadhaar number. Stored securely and never displayed publicly.</div>
             </div>
 
+            <!-- Aadhaar card image upload -->
+            <div class="form-group">
+              <label class="form-label">Aadhaar Card Image</label>
+              <div class="upload-zone" id="aadhaar-upload-zone">
+                <input type="file" accept="image/*,.pdf" id="aadhaar-file"
+                  onchange="handleAadhaarFile(this)"/>
+                <span class="upload-icon">📄</span>
+                <span class="upload-label">Upload Aadhaar Card</span>
+                <span class="upload-hint">JPEG, PNG or PDF · Max 5MB</span>
+                <div class="upload-preview" id="aadhaar-preview"></div>
+              </div>
+              <div class="integration-placeholder">
+                <div class="integration-badge">OCR</div>
+                <div class="integration-text">
+                  <strong>OCR Integration Point</strong>
+                  Auto-extract Aadhaar number from uploaded image. Plug in Tesseract.js or a cloud OCR API here.
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -371,6 +391,35 @@
         val.length === 12 ? val.slice(0, 4) + " XXXX " + val.slice(8) : "—";
     };
 
+    // ── Aadhaar image file selection ─────────────────────────────────────────
+    // Stores the chosen file for later upload; updates the preview label.
+    // OCR hook: swap the comment below with your OCR call when ready.
+    window._aadhaarFile = null;
+
+    window.handleAadhaarFile = function(input) {
+      const file = input.files[0];
+      if (!file) return;
+      window._aadhaarFile = file;
+      document.getElementById("aadhaar-preview").textContent = "✓ " + file.name;
+      // ── OCR INTEGRATION POINT ──────────────────────────────────────────────
+      // runOCR(file).then(num => { document.getElementById("aadhaar-input").value = num; formatAadhaar(document.getElementById("aadhaar-input")); });
+      // ──────────────────────────────────────────────────────────────────────
+    };
+
+    // Drag-and-drop support for the upload zone
+    const uploadZone = document.getElementById("aadhaar-upload-zone");
+    uploadZone.addEventListener("dragover",  e => { e.preventDefault(); uploadZone.classList.add("dragover"); });
+    uploadZone.addEventListener("dragleave", ()  => uploadZone.classList.remove("dragover"));
+    uploadZone.addEventListener("drop", e => {
+      e.preventDefault();
+      uploadZone.classList.remove("dragover");
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        window._aadhaarFile = file;
+        document.getElementById("aadhaar-preview").textContent = "✓ " + file.name;
+      }
+    });
+
     // ── Quick amount buttons ──────────────────────────────────────────────────
     window.setAmount = function(n) {
       document.getElementById("amount-input").value = n;
@@ -483,6 +532,9 @@
       document.getElementById("aadhaar-input").value        = "";
       document.getElementById("amount-input").value         = "";
       document.getElementById("upi-input").value            = "";
+      document.getElementById("aadhaar-file").value         = "";
+      document.getElementById("aadhaar-preview").textContent = "";
+      window._aadhaarFile = null;
       document.querySelectorAll('input[name="anonymity"]').forEach(r => r.checked = false);
       document.getElementById("donor-name-group").classList.remove("visible");
 
