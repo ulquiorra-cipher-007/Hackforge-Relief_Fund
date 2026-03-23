@@ -299,34 +299,100 @@
   </script>
 
   <script type="module">
-    import { supabase, generateTimestamp, uploadFile, showToast }
+    import { supabase, generateTimestamp, uploadFile, showToast, getSession, getMyOrganisation, signOut }
       from './supabase-config.js';
 
-    const params  = new URLSearchParams(window.location.search);
-    const orgId   = params.get("org")  || "unknown";
-    const orgName = params.get("name") || "Organisation";
+    // ── Auth guard ────────────────────────────────────────────────────────────
+    // 1. Check a session exists at all.
+    // 2. Look up which org this user actually belongs to in the database.
+    // 3. Compare it against the org slug in the URL.
+    // If any check fails, redirect to the correct login page.
 
-    document.getElementById("org-name-display").textContent = orgName;
-    document.getElementById("org-id-display").textContent   = orgId;
-    document.title = `${orgName} — Payment Portal | ReliefFund`;
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlOrgId  = urlParams.get("org")  || "";
+    const urlOrgName = urlParams.get("name") || "Organisation";
 
-    // ── Auth guard — redirect to login if no session ──────────────────────────
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      window.location.href = `login.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+    // Show a loading state while we verify — prevents a flash of content
+    document.body.style.visibility = "hidden";
+
+    async function verifyAccess() {
+      const session = await getSession();
+
+      // Not logged in at all
+      if (!session) {
+        redirectToLogin(urlOrgId, urlOrgName);
+        return false;
+      }
+
+      // Fetch the org this user actually owns from the database
+      const org = await getMyOrganisation();
+
+      // User is authenticated but has no linked org row
+      if (!org) {
+        await supabase.auth.signOut();
+        redirectToLogin(urlOrgId, urlOrgName);
+        return false;
+      }
+
+      // User is logged in but trying to access a DIFFERENT org's portal
+      // e.g. Red Cross staff manually typing ?org=unicef-india in the URL
+      if (urlOrgId && org.org_id !== urlOrgId) {
+        // Redirect them to their own org's portal — don't allow cross-org access
+        window.location.href =
+          `payment.html?org=${encodeURIComponent(org.org_id)}&name=${encodeURIComponent(org.name)}`;
+        return false;
+      }
+
+      // ✅ Access granted — populate page with real org data from DB (not URL)
+      document.getElementById("org-name-display").textContent = org.name;
+      document.getElementById("org-id-display").textContent   = org.org_id;
+      document.title = `${org.name} — Payment Portal | ReliefFund`;
+
+      // Expose verified org data for use in submitPayment()
+      window._verifiedOrg = org;
+
+      document.body.style.visibility = "visible";
+      return true;
     }
 
-    // Also listen for sign-out events
+    const accessGranted = await verifyAccess();
+    if (!accessGranted) return; // stop script execution if redirecting
+
+    // ── Listen for sign-out events (e.g. signed out in another tab) ──────────
     supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
-        window.location.href = `login.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+        redirectToLogin(
+          window._verifiedOrg?.org_id || urlOrgId,
+          window._verifiedOrg?.name   || urlOrgName
+        );
       }
     });
 
+    // ── Sign out ──────────────────────────────────────────────────────────────
+    // Wait for signOut() to fully complete before redirecting.
+    // This was the cause of the broken sign-out — redirecting too early
+    // meant the session cookie was still valid on the next page load.
     window.logoutUser = async function() {
-      await supabase.auth.signOut();
-      window.location.href = `login.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+      const btn = document.querySelector(".logout-btn");
+      if (btn) { btn.disabled = true; btn.textContent = "Signing out…"; }
+
+      await signOut(); // waits for Supabase to clear the session
+
+      redirectToLogin(
+        window._verifiedOrg?.org_id || urlOrgId,
+        window._verifiedOrg?.name   || urlOrgName
+      );
     };
+
+    function redirectToLogin(orgId, orgName) {
+      window.location.href =
+        `login.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+    }
+
+    // ── Use verified org data for inserts (not URL params) ────────────────────
+    // These are set after verifyAccess() confirms the user's real org
+    const orgId   = window._verifiedOrg.org_id;
+    const orgName = window._verifiedOrg.name;
 
     // ── State ──────────────────────────────────────────────────────────────────
     let selectedFile = null;
