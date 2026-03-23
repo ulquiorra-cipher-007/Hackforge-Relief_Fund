@@ -104,3 +104,11 @@ export function validateUPI(value) {
   if (!value || value.trim() === "") return true;          // optional field
   return /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/.test(value.trim());
 }
+
+/*script for organisation authentication using supabase auth*/
+
+const { data, error } = await supabase.auth.admin.createUser({
+  email: "org1@example.com",
+  password: "StrongPassword123",
+  email_confirm: true
+});
