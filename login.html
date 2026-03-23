@@ -93,70 +93,103 @@
   <div id="toast-container"></div>
 
   <script type="module">
-    import { supabase, showToast } from './supabase-config.js';
+    import { supabase, signIn, getSession, getMyOrganisation, showToast }
+      from './supabase-config.js';
 
+    // ── Read org slug from URL — used only as a display hint before login ──────
+    // After login, the real org identity comes from the database, not the URL.
     const params  = new URLSearchParams(window.location.search);
-    const orgId   = params.get("org")  || "unknown";
-    const orgName = params.get("name") || "Organisation";
+    const urlOrg  = params.get("org")  || "";
+    const urlName = params.get("name") || "Organisation Portal";
 
-    document.getElementById("org-name-badge").textContent = orgName;
-    document.title = `${orgName} — Login | ReliefFund`;
+    document.getElementById("org-name-badge").textContent = urlName;
+    document.title = `${urlName} — Login | ReliefFund`;
 
-    // ── If already logged in, skip straight to payment page ──────────────────
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      window.location.href = `payment.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+    // ── If already logged in, resolve org and redirect ────────────────────────
+    const existingSession = await getSession();
+    if (existingSession) {
+      await redirectToPayment();
     }
 
-    // ── Listen for auth state changes (e.g. magic link return) ───────────────
-    supabase.auth.onAuthStateChange((event, session) => {
+    // Listen for auth state changes (handles e.g. magic-link returns)
+    supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session) {
-        window.location.href = `payment.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
+        await redirectToPayment();
       }
     });
 
-    // ── Login ─────────────────────────────────────────────────────────────────
-    window.submitLogin = async function() {
-      const email      = document.getElementById("email-input").value.trim();
-      const password   = document.getElementById("password-input").value;
-      const btn        = document.getElementById("login-btn");
-      const errBanner  = document.getElementById("error-banner");
+    // ── redirectToPayment ─────────────────────────────────────────────────────
+    // Looks up the organisations table using the logged-in user's auth_user_id,
+    // then redirects to payment.html with the org's real id and name.
+    // This means the org identity is ALWAYS sourced from the database, never
+    // from a URL parameter that anyone could tamper with.
+    async function redirectToPayment() {
+      const org = await getMyOrganisation();
 
-      errBanner.classList.remove("visible");
+      if (!org) {
+        // Authenticated user exists but has no linked organisation row.
+        // This means the admin created the auth user but forgot to insert
+        // the matching organisations row. Show a clear error.
+        showError(
+          "Your account is not linked to any organisation. " +
+          "Please ask your administrator to complete the setup."
+        );
+        await supabase.auth.signOut();
+        return;
+      }
+
+      window.location.href =
+        `payment.html?org=${encodeURIComponent(org.org_id)}&name=${encodeURIComponent(org.name)}`;
+    }
+
+    // ── submitLogin ───────────────────────────────────────────────────────────
+    window.submitLogin = async function() {
+      const email     = document.getElementById("email-input").value.trim();
+      const password  = document.getElementById("password-input").value;
+      const btn       = document.getElementById("login-btn");
+
+      clearError();
 
       if (!email || !password) {
-        errBanner.textContent = "Please enter both email and password.";
-        errBanner.classList.add("visible");
+        showError("Please enter both email and password.");
         return;
       }
 
       btn.disabled  = true;
       btn.innerHTML = `<span class="spinner"></span> Signing in…`;
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await signIn(email, password);
 
       if (error) {
-        // Map Supabase error messages to user-friendly text
-        const messages = {
+        const friendly = {
           "Invalid login credentials":  "Invalid email or password. Please try again.",
           "Email not confirmed":        "Please verify your email before signing in.",
           "Too many requests":          "Too many attempts. Please wait and try again.",
           "User not found":             "No account found with this email.",
         };
-        const msg = Object.entries(messages).find(([k]) => error.message.includes(k))?.[1]
+        const msg = Object.entries(friendly).find(([k]) => error.message.includes(k))?.[1]
           ?? error.message;
-        errBanner.textContent = msg;
-        errBanner.classList.add("visible");
+        showError(msg);
         btn.disabled  = false;
         btn.innerHTML = "Sign In";
         return;
       }
 
+      // On success, onAuthStateChange fires → redirectToPayment() runs.
+      // Keep button disabled during the redirect.
       showToast("Login successful! Redirecting…", "success");
-      setTimeout(() => {
-        window.location.href = `payment.html?org=${encodeURIComponent(orgId)}&name=${encodeURIComponent(orgName)}`;
-      }, 700);
     };
+
+    // ── UI helpers ────────────────────────────────────────────────────────────
+    function showError(msg) {
+      const el = document.getElementById("error-banner");
+      el.textContent = msg;
+      el.classList.add("visible");
+    }
+
+    function clearError() {
+      document.getElementById("error-banner").classList.remove("visible");
+    }
 
     window.togglePassword = function() {
       const input = document.getElementById("password-input");
