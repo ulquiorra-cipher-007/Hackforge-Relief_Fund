@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ReliefFund — Donate</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .donate-layout { display: grid; grid-template-columns: 1fr 380px; gap: 32px; align-items: start; }
+    #aadhaar-input { font-family: var(--font-mono); font-size: 18px; letter-spacing: 4px; }
+    .amount-prefix-wrap { position: relative; }
+    .amount-prefix { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--text-muted); }
+    .amount-prefix-wrap .form-input { padding-left: 34px; font-family: var(--font-mono); font-size: 18px; }
+    #timestamp-display { font-family: var(--font-mono); font-size: 13px; background: var(--ivory-2); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 11px 16px; color: var(--text-muted); width: 100%; }
+    .quick-amounts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .quick-btn { background: var(--ivory-2); border: 1.5px solid var(--border-2); color: var(--text-2); border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-body); transition: all var(--transition); }
+    .quick-btn:hover { background: var(--forest-muted); border-color: var(--forest-light); color: var(--forest); }
+    .side-panel { position: sticky; top: 88px; }
+    .summary-card { background: var(--forest); color: #fff; border-radius: var(--radius-lg); padding: 28px; margin-bottom: 16px; }
+    .summary-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; margin-bottom: 20px; color: #f7f3ec; }
+    .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.10); font-size: 14px; }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-row-label { color: rgba(255,255,255,0.55); }
+    .summary-row-value { font-family: var(--font-mono); font-weight: 500; color: #fff; }
+    .summary-amount-big { font-family: var(--font-display); font-size: 36px; font-weight: 700; color: #f0c070; margin: 16px 0 4px; }
+    .summary-amount-label { color: rgba(255,255,255,0.5); font-size: 12px; }
+    .records-card { margin-top: 32px; }
+    .records-table-wrap { overflow-x: auto; margin-top: 16px; }
+    .records-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .records-table th { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .records-table td { padding: 11px 16px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+    .records-table tr:last-child td { border-bottom: none; }
+    .records-table tr:hover td { background: var(--ivory); }
+    .records-table td.mono { font-family: var(--font-mono); font-size: 12px; }
+    .amount-cell { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--forest); }
+    .empty-table { text-align: center; padding: 40px; color: var(--text-dim); font-style: italic; }
+
+    /* Radio group — minimal, matches existing form style */
+    .radio-group { display: flex; gap: 24px; margin-top: 4px; }
+    .radio-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-2); cursor: pointer; }
+    .radio-label input[type="radio"] { accent-color: var(--forest); width: 16px; height: 16px; cursor: pointer; }
+
+    /* Donor name field is conditionally shown */
+    #donor-name-group { display: none; }
+    #donor-name-group.visible { display: block; }
+
+    /* Anonymous badge in table */
+    .anon-badge { font-size: 11px; color: var(--text-dim); font-style: italic; }
+
+    @media (max-width: 900px) { .donate-layout { grid-template-columns: 1fr; } .side-panel { position: static; } }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <div class="logo-mark">🌿</div>
+        <span class="logo-name">Relief<span>Fund</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="index.html" class="nav-link">Organisations</a>
+        <a href="donate.html" class="nav-link active btn btn-terra btn-sm">♥ Donate</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-hero">
+      <div class="page-eyebrow">Secure Donation Portal</div>
+      <h1 class="page-title">Make a Donation</h1>
+      <p class="page-subtitle">Your donation is securely recorded with identity verification. All data is stored in Supabase.</p>
+    </div>
+
+    <div class="donate-layout">
+      <div>
+
+        <!-- ── Card 1: Applicant & Donor Identity ─────────────────────────── -->
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-header">
+            <div class="card-icon">🪪</div>
+            <div class="card-title">Identity Details</div>
+          </div>
+          <div class="card-body">
+
+            <div class="section-label">Applicant Information</div>
+
+            <!-- Applicant Name — person raising the funds -->
+            <div class="form-group">
+              <label class="form-label" for="applicant-name-input">
+                Applicant Name <span class="required">*</span>
+              </label>
+              <input type="text" class="form-input" id="applicant-name-input"
+                placeholder="Name of person raising funds"
+                maxlength="255"
+                oninput="updateSummary()"/>
+              <div class="form-hint">The person or organisation raising these funds.</div>
+            </div>
+
+            <div class="section-label">Donor Anonymity</div>
+
+            <!-- Anonymity radio — must be answered before donor name appears -->
+            <div class="form-group">
+              <label class="form-label">
+                Remain Anonymous? <span class="required">*</span>
+              </label>
+              <div class="radio-group" id="anonymity-group">
+                <label class="radio-label">
+                  <input type="radio" name="anonymity" value="yes" onchange="onAnonymityChange()"/>
+                  Yes — keep my name private
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="anonymity" value="no" onchange="onAnonymityChange()"/>
+                  No — display my name publicly
+                </label>
+              </div>
+              <div class="form-hint">Choosing "Yes" will show "Anonymous" in the public donation list.</div>
+            </div>
+
+            <!-- Donor Name — only shown when anonymity = No -->
+            <div class="form-group" id="donor-name-group">
+              <label class="form-label" for="donor-name-input">
+                Donor Name <span class="required">*</span>
+              </label>
+              <input type="text" class="form-input" id="donor-name-input"
+                placeholder="Your full name"
+                maxlength="255"
+                oninput="updateSummary()"/>
+            </div>
+
+            <div class="section-label">Aadhaar Verification</div>
+
+            <!-- Aadhaar number -->
+            <div class="form-group">
+              <label class="form-label" for="aadhaar-input">
+                Aadhaar Card Number <span class="required">*</span>
+              </label>
+              <input type="text" class="form-input" id="aadhaar-input"
+                placeholder="XXXX  XXXX  XXXX"
+                maxlength="14"
+                oninput="formatAadhaar(this)"
+                inputmode="numeric"
+                autocomplete="off"/>
+              <div class="form-hint">12-digit Aadhaar number. Stored securely and never displayed publicly.</div>
+            </div>
+
+            <!-- Aadhaar card image upload -->
+            <div class="form-group">
+              <label class="form-label">Aadhaar Card Image</label>
+              <div class="upload-zone" id="aadhaar-upload-zone">
+                <input type="file" accept="image/*,.pdf" id="aadhaar-file"
+                  onchange="handleAadhaarFile(this)"/>
+                <span class="upload-icon">📄</span>
+                <span class="upload-label">Upload Aadhaar Card</span>
+                <span class="upload-hint">JPEG, PNG or PDF · Max 5MB</span>
+                <div class="upload-preview" id="aadhaar-preview"></div>
+              </div>
+              <div class="integration-placeholder">
+                <div class="integration-badge">OCR</div>
+                <div class="integration-text">
+                  <strong>OCR Integration Point</strong>
+                  Auto-extract Aadhaar number from uploaded image. Plug in Tesseract.js or a cloud OCR API here.
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── Card 2: Donation & Payment Details ─────────────────────────── -->
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-header">
+            <div class="card-icon">💰</div>
+            <div class="card-title">Donation Details</div>
+          </div>
+          <div class="card-body">
+
+            <div class="section-label">Payment Information</div>
+
+            <!-- Amount -->
+            <div class="form-group">
+              <label class="form-label" for="amount-input">
+                Donation Amount (₹) <span class="required">*</span>
+              </label>
+              <div class="amount-prefix-wrap">
+                <span class="amount-prefix">₹</span>
+                <input type="number" class="form-input" id="amount-input"
+                  placeholder="0.00" min="1" step="1"
+                  oninput="updateSummary()"/>
+              </div>
+              <div class="quick-amounts">
+                <button class="quick-btn" type="button" onclick="setAmount(100)">₹100</button>
+                <button class="quick-btn" type="button" onclick="setAmount(500)">₹500</button>
+                <button class="quick-btn" type="button" onclick="setAmount(1000)">₹1,000</button>
+                <button class="quick-btn" type="button" onclick="setAmount(5000)">₹5,000</button>
+                <button class="quick-btn" type="button" onclick="setAmount(10000)">₹10,000</button>
+              </div>
+            </div>
+
+            <!-- UPI Number (optional) -->
+            <div class="form-group">
+              <label class="form-label" for="upi-input">
+                UPI Number / VPA <span style="color:var(--text-dim);font-weight:400;">(optional)</span>
+              </label>
+              <input type="text" class="form-input" id="upi-input"
+                placeholder="e.g. name@upi or 9876543210@okaxis"
+                maxlength="255"
+                autocomplete="off"/>
+              <div class="form-hint">Your UPI ID for payment collection purposes.</div>
+            </div>
+
+            <!-- Auto timestamp -->
+            <div class="form-group">
+              <label class="form-label">Timestamp (Auto-generated)</label>
+              <div id="timestamp-display">—</div>
+              <div class="form-hint">Date and time are recorded automatically at submission.</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button class="btn btn-terra btn-lg btn-full" id="submit-btn" type="button" onclick="submitDonation()">
+          ♥ Submit Donation
+        </button>
+
+      </div><!-- /left col -->
+
+      <!-- ── Right: Summary panel ──────────────────────────────────────────── -->
+      <div class="side-panel">
+        <div class="summary-card">
+          <div class="summary-title">Donation Summary</div>
+          <div class="summary-amount-big" id="summary-amount">₹0</div>
+          <div class="summary-amount-label">Total donation</div>
+          <div style="margin-top: 20px;">
+            <div class="summary-row">
+              <span class="summary-row-label">Applicant</span>
+              <span class="summary-row-value" id="summary-applicant">—</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-row-label">Donor</span>
+              <span class="summary-row-value" id="summary-donor">—</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-row-label">Aadhaar</span>
+              <span class="summary-row-value" id="summary-aadhaar">—</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-row-label">Anonymous</span>
+              <span class="summary-row-value" id="summary-anon">—</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-row-label">Time</span>
+              <span class="summary-row-value" id="summary-time" style="font-size:11px;">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding: 20px;">
+            <p style="font-size: 12px; color: var(--text-muted); line-height: 1.7;">
+              🔒 Your Aadhaar number is stored securely and never shown publicly. UPI details are kept confidential. We do not share personal data with third parties.
+            </p>
+          </div>
+        </div>
+      </div><!-- /side-panel -->
+
+    </div><!-- /donate-layout -->
+
+    <!-- ── Recent Donations table ──────────────────────────────────────────── -->
+    <div class="card records-card">
+      <div class="card-header">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Recent Donations</div>
+        <div style="margin-left: auto;">
+          <button class="btn btn-outline btn-sm" type="button" onclick="exportDonationCSV()">
+            ⬇ Export CSV
+          </button>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 0;">
+        <div class="records-table-wrap">
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>Donor Name</th>
+                <th>Amount</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="donations-tbody">
+              <tr><td colspan="3" class="empty-table">Loading records…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="site-footer">
+    ReliefFund &nbsp;·&nbsp; Donation Portal &nbsp;·&nbsp; Powered by Supabase
+  </footer>
+
+  <div id="toast-container"></div>
+
+  <!-- ── Standalone CSV export (no module dependency) ───────────────────────
+       Uses window._donationRecords populated by the module below.
+       CSV always uses the real donor_name regardless of anonymity flag,
+       so the exported data is complete for administrative record-keeping.
+  ────────────────────────────────────────────────────────────────────────── -->
+  <script>
+    window._donationRecords = [];
+
+    window.exportDonationCSV = function() {
+      const records = window._donationRecords;
+      if (!records.length) {
+        alert("No records to export yet.");
+        return;
+      }
+
+      // CSV columns as specified: name, aadhar_number, amount, timestamp
+      const cols   = ["name", "aadhar_number", "amount", "timestamp"];
+      const header = cols.join(",");
+
+      const escape = v => {
+        const s = String(v ?? "");
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+
+      const rows = records.map(r => [
+        escape(r.donor_name || ""),   // real name — not masked
+        escape(r.aadhar_number || ""),
+        escape(r.amount || ""),
+        escape(r.timestamp || ""),
+      ].join(","));
+
+      const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+      const a    = Object.assign(document.createElement("a"), {
+        href:     URL.createObjectURL(blob),
+        download: "donations.csv",
+      });
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    };
+  </script>
+
+  <!-- ── Main module ─────────────────────────────────────────────────────── -->
+  <script type="module">
+    import { supabase, generateTimestamp, showToast, validateAadhaar }
+      from './supabase-config.js';
+
+    // ── Live timestamp clock ──────────────────────────────────────────────────
+    function tick() {
+      const ts = generateTimestamp();
+      document.getElementById("timestamp-display").textContent = ts;
+      document.getElementById("summary-time").textContent      = ts;
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    // ── Anonymity radio toggle ────────────────────────────────────────────────
+    // Shows / hides the Donor Name field based on radio selection.
+    window.onAnonymityChange = function() {
+      const val       = document.querySelector('input[name="anonymity"]:checked')?.value;
+      const nameGroup = document.getElementById("donor-name-group");
+      const nameInput = document.getElementById("donor-name-input");
+
+      if (val === "no") {
+        nameGroup.classList.add("visible");
+        nameInput.required = true;
+      } else {
+        nameGroup.classList.remove("visible");
+        nameInput.required = false;
+        nameInput.value    = "";
+      }
+
+      document.getElementById("summary-anon").textContent =
+        val === "yes" ? "Yes" : val === "no" ? "No" : "—";
+      document.getElementById("summary-donor").textContent =
+        val === "yes" ? "Anonymous" : (nameInput.value.trim() || "—");
+    };
+
+    // ── Aadhaar input — format as "XXXX XXXX XXXX" ───────────────────────────
+    window.formatAadhaar = function(input) {
+      let val    = input.value.replace(/\D/g, "").slice(0, 12);
+      input.value = val.replace(/(\d{4})(?=\d)/g, "$1 ");
+      // Summary shows masked version for privacy
+      document.getElementById("summary-aadhaar").textContent =
+        val.length === 12 ? val.slice(0, 4) + " XXXX " + val.slice(8) : "—";
+    };
+
+    // ── Aadhaar image file selection ─────────────────────────────────────────
+    // Stores the chosen file for later upload; updates the preview label.
+    // OCR hook: swap the comment below with your OCR call when ready.
+    window._aadhaarFile = null;
+
+    window.handleAadhaarFile = function(input) {
+      const file = input.files[0];
+      if (!file) return;
+      window._aadhaarFile = file;
+      document.getElementById("aadhaar-preview").textContent = "✓ " + file.name;
+      // ── OCR INTEGRATION POINT ──────────────────────────────────────────────
+      // runOCR(file).then(num => { document.getElementById("aadhaar-input").value = num; formatAadhaar(document.getElementById("aadhaar-input")); });
+      // ──────────────────────────────────────────────────────────────────────
+    };
+
+    // Drag-and-drop support for the upload zone
+    const uploadZone = document.getElementById("aadhaar-upload-zone");
+    uploadZone.addEventListener("dragover",  e => { e.preventDefault(); uploadZone.classList.add("dragover"); });
+    uploadZone.addEventListener("dragleave", ()  => uploadZone.classList.remove("dragover"));
+    uploadZone.addEventListener("drop", e => {
+      e.preventDefault();
+      uploadZone.classList.remove("dragover");
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        window._aadhaarFile = file;
+        document.getElementById("aadhaar-preview").textContent = "✓ " + file.name;
+      }
+    });
+
+    // ── Quick amount buttons ──────────────────────────────────────────────────
+    window.setAmount = function(n) {
+      document.getElementById("amount-input").value = n;
+      updateSummary();
+    };
+
+    // ── Live summary panel update ─────────────────────────────────────────────
+    window.updateSummary = function() {
+      const amt       = parseFloat(document.getElementById("amount-input").value) || 0;
+      const applicant = document.getElementById("applicant-name-input").value.trim();
+      const donor     = document.getElementById("donor-name-input").value.trim();
+      const anonVal   = document.querySelector('input[name="anonymity"]:checked')?.value;
+
+      document.getElementById("summary-amount").textContent    = "₹" + amt.toLocaleString("en-IN");
+      document.getElementById("summary-applicant").textContent = applicant || "—";
+
+      if (anonVal === "yes") {
+        document.getElementById("summary-donor").textContent = "Anonymous";
+      } else if (anonVal === "no") {
+        document.getElementById("summary-donor").textContent = donor || "—";
+      }
+    };
+
+    // ── Form validation ───────────────────────────────────────────────────────
+    function validateForm() {
+      const applicantName = document.getElementById("applicant-name-input").value.trim();
+      const rawAadhaar    = document.getElementById("aadhaar-input").value.replace(/\s/g, "");
+      const amount        = parseFloat(document.getElementById("amount-input").value);
+      const anonVal       = document.querySelector('input[name="anonymity"]:checked')?.value;
+      const donorName     = document.getElementById("donor-name-input").value.trim();
+
+      if (!applicantName) {
+        showToast("Please enter the applicant name.", "error");
+        return false;
+      }
+      if (!anonVal) {
+        showToast("Please select an anonymity preference.", "error");
+        return false;
+      }
+      if (anonVal === "no" && !donorName) {
+        showToast("Please enter the donor name, or choose to remain anonymous.", "error");
+        return false;
+      }
+      if (!validateAadhaar(rawAadhaar)) {
+        showToast("Please enter a valid 12-digit Aadhaar number.", "error");
+        return false;
+      }
+      if (!amount || amount <= 0) {
+        showToast("Please enter a valid donation amount.", "error");
+        return false;
+      }
+      return true;
+    }
+
+    // ── Submit donation ───────────────────────────────────────────────────────
+    window.submitDonation = async function() {
+      if (!validateForm()) return;
+
+      const btn = document.getElementById("submit-btn");
+      btn.disabled  = true;
+      btn.innerHTML = `<span class="spinner"></span> Submitting…`;
+
+      try {
+        const applicantName = document.getElementById("applicant-name-input").value.trim();
+        const rawAadhaar    = document.getElementById("aadhaar-input").value.replace(/\s/g, "");
+        const amount        = parseFloat(document.getElementById("amount-input").value);
+        const upiNumber     = document.getElementById("upi-input").value.trim() || null;
+        const anonVal       = document.querySelector('input[name="anonymity"]:checked').value;
+        const donorName     = anonVal === "no"
+          ? document.getElementById("donor-name-input").value.trim()
+          : null;   // store null when anonymous — display logic handles "Anonymous" label
+        const isAnonymous   = anonVal === "yes";
+        const timestamp     = generateTimestamp();
+
+        // Insert into Supabase — schema matches CREATE TABLE in README
+        const { data, error } = await supabase
+          .from("donations")
+          .insert([{
+            applicant_name: applicantName,
+            donor_name:     donorName,       // null if anonymous
+            aadhar_number:  rawAadhaar,
+            amount:         amount,
+            upi_number:     upiNumber,
+            is_anonymous:   isAnonymous,
+            timestamp:      timestamp,
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        window._donationRecords.unshift(data);
+        showToast("✓ Donation recorded successfully!", "success");
+        renderTable(window._donationRecords);
+        resetForm();
+
+      } catch (err) {
+        console.error("Donation submit error:", err);
+        showToast("Error saving donation: " + (err.message || "Check Supabase config."), "error");
+      } finally {
+        btn.disabled  = false;
+        btn.innerHTML = "♥ Submit Donation";
+      }
+    };
+
+    // ── Reset form after successful submission ────────────────────────────────
+    function resetForm() {
+      document.getElementById("applicant-name-input").value = "";
+      document.getElementById("donor-name-input").value     = "";
+      document.getElementById("aadhaar-input").value        = "";
+      document.getElementById("amount-input").value         = "";
+      document.getElementById("upi-input").value            = "";
+      document.getElementById("aadhaar-file").value         = "";
+      document.getElementById("aadhaar-preview").textContent = "";
+      window._aadhaarFile = null;
+      document.querySelectorAll('input[name="anonymity"]').forEach(r => r.checked = false);
+      document.getElementById("donor-name-group").classList.remove("visible");
+
+      // Reset summary
+      document.getElementById("summary-amount").textContent    = "₹0";
+      document.getElementById("summary-applicant").textContent = "—";
+      document.getElementById("summary-donor").textContent     = "—";
+      document.getElementById("summary-aadhaar").textContent   = "—";
+      document.getElementById("summary-anon").textContent      = "—";
+    }
+
+    // ── Load existing records from Supabase ───────────────────────────────────
+    // Only fetch the columns needed for public display.
+    // Sensitive columns (aadhar_number, upi_number) are intentionally excluded
+    // from the SELECT so they never appear in the browser's network tab.
+    // The full record (with aadhar_number) is fetched only after a new insert
+    // via .select().single() above — needed to populate the CSV cache.
+    async function loadRecords() {
+      const { data, error } = await supabase
+        .from("donations")
+        .select("id, donor_name, amount, timestamp, is_anonymous, aadhar_number")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) {
+        document.getElementById("donations-tbody").innerHTML =
+          `<tr><td colspan="3" class="empty-table">Connect Supabase to view records.</td></tr>`;
+        return;
+      }
+
+      window._donationRecords = data || [];
+      renderTable(window._donationRecords);
+    }
+
+    // ── Render the public donations table ─────────────────────────────────────
+    // Anonymity rule: if is_anonymous === true, show "Anonymous" regardless of donor_name.
+    function renderTable(records) {
+      const tbody = document.getElementById("donations-tbody");
+
+      if (!records.length) {
+        tbody.innerHTML = `<tr><td colspan="3" class="empty-table">No donations recorded yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = records.map(r => {
+        // Display name — respects anonymity flag
+        const displayName = r.is_anonymous
+          ? `<span class="anon-badge">Anonymous</span>`
+          : (r.donor_name ? escapeHtml(r.donor_name) : `<span class="anon-badge">—</span>`);
+
+        return `<tr>
+          <td>${displayName}</td>
+          <td class="amount-cell">₹${Number(r.amount).toLocaleString("en-IN")}</td>
+          <td class="mono" style="font-size:11px;">${escapeHtml(r.timestamp)}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    // ── Utility: escape HTML to prevent XSS in table cells ───────────────────
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    loadRecords();
+  </script>
+</body>
+</html>
