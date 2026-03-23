@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ReliefFund — Create Organisation</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    .admin-page { flex: 1; position: relative; z-index: 1; }
+
+    /* ── Admin gate ── */
+    #admin-gate { display: flex; align-items: center; justify-content: center; padding: 60px 20px; }
+    .gate-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 40px; max-width: 420px; width: 100%; box-shadow: var(--shadow-lg); }
+    .gate-title { font-family: var(--font-display); font-size: 26px; font-weight: 700; color: var(--forest); margin-bottom: 6px; }
+    .gate-sub { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+    .error-banner { background: rgba(193,68,14,0.08); border: 1px solid var(--terra-border); border-radius: var(--radius); padding: 11px 16px; color: var(--terra-2); font-size: 13px; margin-bottom: 16px; display: none; }
+    .error-banner.visible { display: block; }
+
+    /* ── Create form ── */
+    #create-section { display: none; }
+
+    .result-card {
+      background: rgba(34,197,94,0.07);
+      border: 1px solid rgba(34,197,94,0.3);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      margin-top: 20px;
+    }
+    .result-title { font-weight: 700; color: #166534; margin-bottom: 12px; font-size: 15px; }
+    .result-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(34,197,94,0.15); font-size: 13px; }
+    .result-row:last-child { border-bottom: none; }
+    .result-label { color: var(--text-muted); }
+    .result-value { font-family: var(--font-mono); font-weight: 600; color: var(--text); word-break: break-all; text-align: right; max-width: 240px; }
+
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border-2);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 8px;
+      transition: all var(--transition);
+    }
+    .copy-btn:hover { background: var(--forest-muted); color: var(--forest); border-color: var(--forest); }
+
+    .warning-box {
+      background: rgba(234,179,8,0.08);
+      border: 1px solid rgba(234,179,8,0.35);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #854d0e;
+      margin-top: 16px;
+      line-height: 1.6;
+    }
+
+    .org-list { margin-top: 40px; }
+    .org-list-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--forest); margin-bottom: 16px; }
+
+    .org-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .org-table th { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+    .org-table td { padding: 11px 16px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+    .org-table tr:last-child td { border-bottom: none; }
+    .org-table tr:hover td { background: var(--ivory); }
+    .org-table td.mono { font-family: var(--font-mono); font-size: 11px; }
+
+    .badge-active   { background: rgba(34,197,94,0.10); color: #166534; border: 1px solid rgba(34,197,94,0.3); padding: 2px 8px; border-radius: 20px; font-size: 11px; font-family: var(--font-mono); }
+    .badge-inactive { background: var(--ivory-2); color: var(--text-dim); border: 1px solid var(--border); padding: 2px 8px; border-radius: 20px; font-size: 11px; font-family: var(--font-mono); }
+
+    .input-with-toggle { position: relative; }
+    .input-with-toggle .form-input { padding-right: 48px; }
+    .toggle-pw { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 16px; padding: 4px; }
+    .toggle-pw:hover { color: var(--forest); }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">
+        <div class="logo-mark">🌿</div>
+        <span class="logo-name">Relief<span>Fund</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="index.html" class="nav-link">Directory</a>
+        <a href="donate.html" class="nav-link btn btn-terra btn-sm">♥ Donate</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="admin-page page-content">
+
+    <!-- ── Step 1: Admin password gate ────────────────────────────────────── -->
+    <!--
+      This gate protects the tool with a simple client-side password.
+      It prevents accidental access — actual data security is enforced
+      by Supabase RLS policies, not this gate.
+      Change ADMIN_GATE_PASSWORD below to something secure.
+    -->
+    <div id="admin-gate">
+      <div class="gate-card">
+        <div class="gate-title">🔐 Admin Access</div>
+        <p class="gate-sub">This tool creates organisation accounts. Enter the admin passphrase to continue.</p>
+        <div class="error-banner" id="gate-error"></div>
+        <div class="form-group">
+          <label class="form-label">Admin Passphrase</label>
+          <div class="input-with-toggle">
+            <input type="password" class="form-input" id="gate-input"
+              placeholder="Enter passphrase"
+              onkeydown="if(event.key==='Enter') unlockAdmin()"/>
+            <button class="toggle-pw" onclick="toggleGatePw()" type="button">👁</button>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="unlockAdmin()">Unlock</button>
+      </div>
+    </div>
+
+    <!-- ── Step 2: Create org form (shown after gate) ─────────────────────── -->
+    <div id="create-section">
+      <div class="page-hero">
+        <div class="page-eyebrow">Admin Tool</div>
+        <h1 class="page-title">Create Organisation Account</h1>
+        <p class="page-subtitle">Creates a Supabase Auth user and links it to an organisation record in one step.</p>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start;">
+
+        <!-- Left: form -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">🏢</div>
+            <div class="card-title">New Organisation</div>
+          </div>
+          <div class="card-body">
+
+            <div class="form-group">
+              <label class="form-label">Organisation Name <span class="required">*</span></label>
+              <input type="text" class="form-input" id="org-name"
+                placeholder="e.g. Red Cross Relief" maxlength="255"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Organisation ID (slug) <span class="required">*</span></label>
+              <input type="text" class="form-input" id="org-slug"
+                placeholder="e.g. red-cross" maxlength="100"
+                oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')"/>
+              <div class="form-hint">Lowercase letters, numbers and hyphens only. Used in URLs.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Organisation Type</label>
+              <input type="text" class="form-input" id="org-type"
+                placeholder="e.g. Disaster Relief" maxlength="100"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <input type="text" class="form-input" id="org-desc"
+                placeholder="Short description" maxlength="255"/>
+            </div>
+
+            <div style="border-top: 1px solid var(--border); margin: 20px 0;"></div>
+            <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--terra); margin-bottom: 16px;">Login Credentials</div>
+
+            <div class="form-group">
+              <label class="form-label">Staff Email <span class="required">*</span></label>
+              <input type="email" class="form-input" id="org-email"
+                placeholder="staff@organisation.org"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Password <span class="required">*</span></label>
+              <div class="input-with-toggle">
+                <input type="password" class="form-input" id="org-password"
+                  placeholder="Min 8 characters"/>
+                <button class="toggle-pw" onclick="toggleOrgPw()" type="button">👁</button>
+              </div>
+              <div class="form-hint">Or click Generate to create a secure random password.</div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-bottom: 20px;">
+              <button class="btn btn-outline btn-sm" onclick="generatePassword()">⚡ Generate Password</button>
+            </div>
+
+            <div class="error-banner" id="create-error"></div>
+
+            <button class="btn btn-primary btn-full" id="create-btn" onclick="createOrg()">
+              Create Organisation
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: result + instructions -->
+        <div>
+          <div id="result-box" style="display:none;"></div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-icon">📋</div>
+              <div class="card-title">How It Works</div>
+            </div>
+            <div class="card-body" style="font-size: 13px; color: var(--text-muted); line-height: 1.8;">
+              <p style="margin-bottom:12px;">This tool performs two operations in one:</p>
+              <ol style="padding-left: 18px; display: flex; flex-direction: column; gap: 10px;">
+                <li><strong style="color:var(--text-2);">Creates a Supabase Auth user</strong><br/>
+                  The email + password are stored in Supabase's secure auth system. Passwords are hashed — never stored in plain text.</li>
+                <li><strong style="color:var(--text-2);">Inserts an organisations row</strong><br/>
+                  The new auth user's UUID is saved as <code>auth_user_id</code>, linking the account to your org data permanently.</li>
+                <li><strong style="color:var(--text-2);">Login flow</strong><br/>
+                  When staff log in, the system fetches their org record by <code>auth_user_id</code> — the URL parameter is only a display hint and cannot be spoofed.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Existing orgs table -->
+      <div class="org-list">
+        <div class="org-list-title">Registered Organisations</div>
+        <div class="card">
+          <div class="card-body" style="padding: 0;">
+            <table class="org-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>ID (slug)</th>
+                  <th>Type</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody id="orgs-tbody">
+                <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-dim);font-style:italic;">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /#create-section -->
+  </main>
+
+  <footer class="site-footer">
+    ReliefFund &nbsp;·&nbsp; Admin Tool &nbsp;·&nbsp; Handle credentials with care
+  </footer>
+
+  <div id="toast-container"></div>
+
+  <script type="module">
+    import { supabase, showToast } from './supabase-config.js';
+
+    // ── Admin gate passphrase ─────────────────────────────────────────────────
+    // Change this to a strong passphrase. This is a client-side convenience
+    // guard only — real security is enforced by Supabase RLS.
+    const ADMIN_GATE_PASSWORD = "relieffund-admin-2025";
+
+    window.unlockAdmin = function() {
+      const val = document.getElementById("gate-input").value;
+      if (val === ADMIN_GATE_PASSWORD) {
+        document.getElementById("admin-gate").style.display    = "none";
+        document.getElementById("create-section").style.display = "block";
+        loadOrgs();
+      } else {
+        const err = document.getElementById("gate-error");
+        err.textContent = "Incorrect passphrase.";
+        err.classList.add("visible");
+      }
+    };
+
+    window.toggleGatePw = function() {
+      const i = document.getElementById("gate-input");
+      i.type = i.type === "password" ? "text" : "password";
+    };
+
+    window.toggleOrgPw = function() {
+      const i = document.getElementById("org-password");
+      i.type = i.type === "password" ? "text" : "password";
+    };
+
+    // ── Generate a secure random password ─────────────────────────────────────
+    window.generatePassword = function() {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&";
+      const arr   = new Uint8Array(16);
+      crypto.getRandomValues(arr);
+      const pw = Array.from(arr, b => chars[b % chars.length]).join("");
+      const input = document.getElementById("org-password");
+      input.type  = "text";
+      input.value = pw;
+      showToast("Password generated — copy it before submitting.", "info");
+    };
+
+    // ── createOrg ─────────────────────────────────────────────────────────────
+    // Uses the Supabase Edge Function "create-org-user" (see create-org-user/index.ts).
+    // The Edge Function runs with the service_role key so it can call auth.admin.createUser.
+    // The anon key used here cannot call admin APIs — that's intentional.
+    window.createOrg = async function() {
+      const name     = document.getElementById("org-name").value.trim();
+      const slug     = document.getElementById("org-slug").value.trim();
+      const type     = document.getElementById("org-type").value.trim();
+      const desc     = document.getElementById("org-desc").value.trim();
+      const email    = document.getElementById("org-email").value.trim();
+      const password = document.getElementById("org-password").value;
+      const errEl    = document.getElementById("create-error");
+      const btn      = document.getElementById("create-btn");
+
+      errEl.classList.remove("visible");
+
+      // Client-side validation
+      if (!name)                   { showCreateError("Organisation name is required.");    return; }
+      if (!slug)                   { showCreateError("Organisation ID (slug) is required."); return; }
+      if (!/^[a-z0-9-]+$/.test(slug)) { showCreateError("Slug must be lowercase letters, numbers and hyphens only."); return; }
+      if (!email)                  { showCreateError("Staff email is required.");          return; }
+      if (password.length < 8)    { showCreateError("Password must be at least 8 characters."); return; }
+
+      btn.disabled  = true;
+      btn.innerHTML = `<span class="spinner"></span> Creating…`;
+
+      try {
+        // ── Call the Edge Function ───────────────────────────────────────────
+        // The Edge Function uses service_role to create the auth user,
+        // then inserts the organisations row — both in one atomic operation.
+        const { data, error } = await supabase.functions.invoke("create-org-user", {
+          body: { name, org_id: slug, type, description: desc, email, password },
+        });
+
+        if (error) throw new Error(error.message);
+        if (data?.error) throw new Error(data.error);
+
+        showResult({ name, slug, email, password, authUserId: data.auth_user_id });
+        showToast("Organisation created successfully!", "success");
+        clearForm();
+        loadOrgs();
+
+      } catch (err) {
+        console.error("createOrg error:", err);
+        showCreateError(err.message || "Failed to create organisation. Check console.");
+      } finally {
+        btn.disabled  = false;
+        btn.innerHTML = "Create Organisation";
+      }
+    };
+
+    function showCreateError(msg) {
+      const el = document.getElementById("create-error");
+      el.textContent = msg;
+      el.classList.add("visible");
+    }
+
+    // ── Show the newly created credentials ────────────────────────────────────
+    function showResult({ name, slug, email, password, authUserId }) {
+      const box = document.getElementById("result-box");
+      box.style.display = "block";
+      box.innerHTML = `
+        <div class="result-card">
+          <div class="result-title">✅ Organisation Created</div>
+          <div class="result-row">
+            <span class="result-label">Name</span>
+            <span class="result-value">${escHtml(name)}</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Org ID</span>
+            <span class="result-value">${escHtml(slug)}</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Auth User ID</span>
+            <span class="result-value" style="font-size:10px;">${escHtml(authUserId)}</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Login Email</span>
+            <span class="result-value">${escHtml(email)}</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Password</span>
+            <span class="result-value">
+              ${escHtml(password)}
+              <button class="copy-btn" onclick="navigator.clipboard.writeText('${escHtml(password)}').then(()=>alert('Copied!'))">Copy</button>
+            </span>
+          </div>
+        </div>
+        <div class="warning-box">
+          ⚠️ <strong>Save these credentials now.</strong>
+          The password shown above is in plain text only once.
+          After you close this box, it cannot be recovered — only reset.
+          Share them securely with the organisation's staff member.
+        </div>`;
+    }
+
+    // ── Load existing organisations ───────────────────────────────────────────
+    async function loadOrgs() {
+      const { data, error } = await supabase
+        .from("organisations")
+        .select("name, org_id, type, login_email, is_active, created_at")
+        .order("created_at", { ascending: false });
+
+      const tbody = document.getElementById("orgs-tbody");
+
+      if (error || !data?.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-dim);font-style:italic;">${error ? "Error loading organisations." : "No organisations yet."}</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = data.map(o => `
+        <tr>
+          <td><strong>${escHtml(o.name)}</strong></td>
+          <td class="mono">${escHtml(o.org_id)}</td>
+          <td>${escHtml(o.type || "—")}</td>
+          <td class="mono">${escHtml(o.login_email || "—")}</td>
+          <td><span class="${o.is_active ? "badge-active" : "badge-inactive"}">${o.is_active ? "Active" : "Inactive"}</span></td>
+          <td class="mono">${o.created_at ? new Date(o.created_at).toLocaleDateString("en-IN") : "—"}</td>
+        </tr>`).join("");
+    }
+
+    function clearForm() {
+      ["org-name","org-slug","org-type","org-desc","org-email","org-password"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+    }
+
+    function escHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+  </script>
+</body>
+</html>
