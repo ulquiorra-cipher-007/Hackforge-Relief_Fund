@@ -138,3 +138,41 @@ export function validateUPI(value) {
   if (!value || value.trim() === "") return true;
   return /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/.test(value.trim());
 }
+
+// ============================================================
+//  savePaymentWithGeo
+//  Inserts a payment record including EXIF GPS coordinates.
+//  Coordinates come from window.geoData (set by js/geotag.js).
+//
+//  @param {Object} data
+//    amount         {number}  - MRP amount
+//    organization_id {string} - org_id slug
+//    receipt_url    {string|null}
+//    product_code   {string}
+//    shop_location  {string}
+//    timestamp      {string}
+//    org_name       {string}
+// ============================================================
+export async function savePaymentWithGeo(data) {
+  const geo = window.geoData || null; // set by js/geotag.js after EXIF extraction
+
+  const { data: row, error } = await supabase
+    .from("org_payments")
+    .insert([{
+      org_id:        data.organization_id,
+      org_name:      data.org_name,
+      product_code:  data.product_code,
+      mrp:           data.amount,
+      shop_location: data.shop_location,
+      timestamp:     data.timestamp,
+      receipt_url:   data.receipt_url    ?? null,
+      gps_lat:       geo?.lat            ?? null,
+      gps_lng:       geo?.lon            ?? null,
+      gps_accuracy:  null, // EXIF GPS doesn't carry accuracy — device GPS does
+    }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return row;
+}
