@@ -155,11 +155,11 @@
             <div class="section-label">Document Verification</div>
             <div class="form-group">
               <div class="upload-zone" id="receipt-upload-zone">
-                <input type="file" accept="image/*,.pdf" id="receipt-file"
+                <input type="file" accept="image/jpeg,image/jpg" id="receipt-file"
                   onchange="handleFileSelect(this, 'receipt-preview')"/>
                 <span class="upload-icon">🧾</span>
-                <span class="upload-label">Upload Receipt / Invoice</span>
-                <span class="upload-hint">JPEG, PNG or PDF · Max 10MB</span>
+                <span class="upload-label">Upload Receipt (JPG with GPS)</span>
+                <span class="upload-hint">JPG/JPEG only · Must contain GPS metadata · Max 10MB</span>
                 <div class="upload-preview" id="receipt-preview"></div>
               </div>
               <div class="integration-placeholder" style="margin-top:12px;">
@@ -460,7 +460,15 @@
     zone.addEventListener("drop", e => {
       e.preventDefault(); zone.classList.remove("dragover");
       const f = e.dataTransfer.files[0];
-      if (f) { selectedFile = f; document.getElementById("receipt-preview").textContent = "✓ " + f.name; document.getElementById("sum-receipt").textContent = "Attached ✓"; }
+      if (f) {
+        selectedFile = f;
+        document.getElementById("receipt-preview").textContent = "✓ " + f.name;
+        document.getElementById("sum-receipt").textContent = "Attached ✓";
+        // Run geo extraction on drag-dropped file (geotag.js exposes this globally)
+        if (typeof window._processReceiptGeo === "function") {
+          window._processReceiptGeo(f);
+        }
+      }
     });
 
     // ── Submit ────────────────────────────────────────────────────────────────
@@ -491,6 +499,9 @@
         }
 
         // Insert row into "org_payments" table
+        // GPS: prefer EXIF geo from receipt image; fall back to browser GPS button
+        const geoSource = window.geoData || capturedGPS || null;
+
         const { data, error } = await supabase
           .from("org_payments")
           .insert([{
@@ -501,8 +512,8 @@
             shop_location: shopLocation,
             timestamp:     timestamp,
             receipt_url:   receipt_url,
-            gps_lat:       capturedGPS?.lat  ?? null,
-            gps_lng:       capturedGPS?.lng  ?? null,
+            gps_lat:       geoSource?.lat      ?? null,
+            gps_lng:       geoSource?.lon ?? geoSource?.lng ?? null,
             gps_accuracy:  capturedGPS?.accuracy ?? null,
           }])
           .select()
@@ -523,7 +534,8 @@
         document.getElementById("sum-mrp").textContent         = "—";
         document.getElementById("sum-shop").textContent        = "—";
         document.getElementById("sum-receipt").textContent     = "Not uploaded";
-        selectedFile = null;
+        selectedFile   = null;
+        window.geoData = null; // clear EXIF geo after successful submission
 
       } catch (err) {
         console.error(err);
@@ -559,9 +571,18 @@
         return;
       }
       tbody.innerHTML = records.map(r => {
-        const gps = (r.gps_lat && r.gps_lng)
-          ? `${Number(r.gps_lat).toFixed(4)}, ${Number(r.gps_lng).toFixed(4)}`
-          : "—";
+        let gpsCell = `<span style="color:var(--text-dim);font-size:12px;">—</span>`;
+        if (r.gps_lat && r.gps_lng) {
+          const lat  = Number(r.gps_lat).toFixed(4);
+          const lon  = Number(r.gps_lng).toFixed(4);
+          const url  = `https://www.google.com/maps?q=${lat},${lon}`;
+          gpsCell = `
+            <span style="font-family:var(--font-mono);font-size:11px;">${lat}, ${lon}</span><br>
+            <a href="${url}" target="_blank" rel="noopener"
+               style="font-size:11px;color:var(--terra);text-decoration:underline;">
+              Open in Maps ↗
+            </a>`;
+        }
         return `<tr>
           <td class="mono">${r.product_code || "—"}</td>
           <td class="mrp-cell">₹${Number(r.mrp).toLocaleString("en-IN")}</td>
@@ -570,12 +591,14 @@
           <td>${r.receipt_url
             ? `<a href="${r.receipt_url}" target="_blank" style="color:var(--terra);font-size:12px;">View ↗</a>`
             : `<span style="color:var(--text-dim);font-size:12px;">—</span>`}</td>
-          <td class="mono" style="font-size:11px;">${gps}</td>
+          <td>${gpsCell}</td>
         </tr>`;
       }).join("");
     }
 
     loadRecords();
   </script>
+  <!-- ── Geo-tag module: extracts GPS from JPG EXIF on receipt upload ──────── -->
+  <script type="module" src="js/geotag.js"></script>
 </body>
 </html>
